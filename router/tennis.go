@@ -63,40 +63,57 @@ type Balls struct {
 	Price             float64         `json:"price"`
 }
 
+type Users struct {
+	ID      int     `json:"id"`
+	Balance float64 `json:"balance"`
+}
+
 type PurchaseForRacket struct {
-	ID       int     `json:"id"`
-	RacketID int     `json:"racket_id"`
-	Quantity float64 `json:"quantity"`
-
+	ID          int     `json:"id"`
+	UserID      int     `json:"user_id"`
+	RacketID    int     `json:"racket_id"`
+	Quantity    float64 `json:"quantity"`
 	RacketPrice float64 `json:"racket_price"`
+	TotalPrice  float64 `json:"total_price"`
 }
+
 type PurchaseForShoes struct {
-	ID       int     `json:"id"`
-	ShoesID  int     `json:"shoes_id"`
-	Quantity float64 `json:"quantity"`
-
+	ID         int     `json:"id"`
+	UserID     int     `json:"user_id"`
+	ShoesID    int     `json:"shoes_id"`
+	Quantity   float64 `json:"quantity"`
 	ShoesPrice float64 `json:"shoes_price"`
+	TotalPrice float64 `json:"total_price"`
 }
+
 type PurchaseForAccessories struct {
-	ID       int     `json:"id"`
-	AccessID int     `json:"access_id"`
-	Quantity float64 `json:"quantity"`
-
+	ID          int     `json:"id"`
+	UserID      int     `json:"user_id"`
+	AccessID    int     `json:"access_id"`
+	Quantity    float64 `json:"quantity"`
 	AccessPrice float64 `json:"access_price"`
+	TotalPrice  float64 `json:"total_price"`
 }
+
 type PurchaseForBalls struct {
-	ID       int     `json:"id"`
-	BallsID  int     `json:"Balls_id"`
-	Quantity float64 `json:"quantity"`
-
+	ID         int     `json:"id"`
+	UserID     int     `json:"user_id"`
+	BallsID    int     `json:"balls_id"`
+	Quantity   float64 `json:"quantity"`
 	BallsPrice float64 `json:"balls_price"`
+	TotalPrice float64 `json:"total_price"`
 }
-
 type Review struct {
 	ID          int    `json:"id"`
 	ProductName string `json:"product_name"`
 	Comment     string `json:"comment"`
 	Rating      int    `json:"rating" validate:"min=1,max=10"`
+}
+type AllPurchases struct {
+	RacketPurchases      []PurchaseForRacket      `json:"racket_purchases"`
+	ShoesPurchases       []PurchaseForShoes       `json:"shoes_purchases"`
+	AccessoriesPurchases []PurchaseForAccessories `json:"accessories_purchases"`
+	BallsPurchases       []PurchaseForBalls       `json:"balls_purchases"`
 }
 
 type CacheData struct {
@@ -116,7 +133,8 @@ func NewCache() *Cache {
 
 var db *gorm.DB
 var err error
-
+var racket Racket
+var user Users
 var CacheInstance *Cache
 
 func InitialMigration() {
@@ -127,7 +145,7 @@ func InitialMigration() {
 		log.Fatalf("Ошибка при подключении к базе данных: %v", err)
 	}
 
-	err = db.AutoMigrate(&TennisThingType{}, &Racket{}, &Shoes{}, &Accessories{}, &Balls{}, &PurchaseForRacket{}, &PurchaseForShoes{}, &PurchaseForAccessories{}, &PurchaseForBalls{}, &Review{})
+	err = db.AutoMigrate(&TennisThingType{}, &Racket{}, &Shoes{}, &Accessories{}, &Balls{}, &Users{}, &PurchaseForRacket{}, &PurchaseForShoes{}, &PurchaseForAccessories{}, &PurchaseForBalls{}, &Review{})
 	if err != nil {
 		log.Fatalf("Ошибка при автомиграции таблиц: %v", err)
 	}
@@ -139,12 +157,8 @@ func GetTennisThingType(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// tmpl := template.Must(template.ParseFiles("templates/GetAnimalTypes.html"))
-	// if err := tmpl.Execute(w,TennisThingType); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(TennisThingType)
 }
 func CreateTennisThingType(w http.ResponseWriter, r *http.Request) {
 
@@ -160,15 +174,62 @@ func CreateTennisThingType(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tmpl := template.Must(template.ParseFiles("templates/CreateAnimalType.html"))
-	// if err := tmpl.Execute(w, nil); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
 	w.WriteHeader(http.StatusCreated)
 	fmt.Println("Created animal type:", TennisThingType)
 }
+func CreateUsers(w http.ResponseWriter, r *http.Request) {
+
+	var users Users
+	if err := json.NewDecoder(r.Body).Decode(&users); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result := db.Create(&users)
+	if result.Error != nil {
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+
+}
+func GetUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+
+	var user Users
+	if err := db.First(&user, params["id"]).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(user)
+}
+func DeleteUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+
+	var user Users
+	if err := db.Delete(&user, params["id"]).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+func GetUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var users []Users
+	if err := db.Find(&users).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(users)
+}
+
 func CreateRacket(w http.ResponseWriter, r *http.Request) {
 	var racket Racket
 	if err := json.NewDecoder(r.Body).Decode(&racket); err != nil {
@@ -182,11 +243,13 @@ func CreateRacket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tmpl := template.Must(template.ParseFiles("templates/CreateAnimal.html"))
-	// if err := tmpl.Execute(w, nil); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+}
+func GetReviews(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var reviews []Review
+	db.Find(&reviews)
+	json.NewEncoder(w).Encode(reviews)
+
 }
 func CreateShoes(w http.ResponseWriter, r *http.Request) {
 	var shoes Shoes
@@ -201,11 +264,6 @@ func CreateShoes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tmpl := template.Must(template.ParseFiles("templates/CreateAnimal.html"))
-	// if err := tmpl.Execute(w, nil); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
 }
 func CreateAccessories(w http.ResponseWriter, r *http.Request) {
 	var accessories Accessories
@@ -220,11 +278,6 @@ func CreateAccessories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tmpl := template.Must(template.ParseFiles("templates/CreateAnimal.html"))
-	// if err := tmpl.Execute(w, nil); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
 }
 func CreateBalls(w http.ResponseWriter, r *http.Request) {
 	var balls Balls
@@ -239,11 +292,6 @@ func CreateBalls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tmpl := template.Must(template.ParseFiles("templates/CreateAnimal.html"))
-	// if err := tmpl.Execute(w, nil); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
 }
 func GetRackets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -338,131 +386,6 @@ func DeleteBall(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("delete")
 }
 
-func MakePurchaseForRacket(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var purchase PurchaseForRacket
-	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if purchase.Quantity <= 0 {
-		http.Error(w, "не правильное количество", http.StatusBadRequest)
-		return
-	}
-
-	total := calculateTotalPriceOfRacket(purchase)
-
-	purchase.RacketPrice = total
-
-	if err := db.Create(&purchase).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(purchase)
-}
-
-func calculateTotalPriceOfRacket(purchase PurchaseForRacket) float64 {
-	totalPrice := (purchase.Quantity * purchase.RacketPrice)
-	return totalPrice
-}
-
-func MakePurchaseForShoes(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var purchase PurchaseForShoes
-	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if purchase.Quantity <= 0 {
-		http.Error(w, "не правильное количество", http.StatusBadRequest)
-		return
-	}
-
-	total := calculateTotalPriceOfShoes(purchase)
-
-	purchase.ShoesPrice = total
-
-	if err := db.Create(&purchase).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(purchase)
-}
-
-func calculateTotalPriceOfShoes(purchase PurchaseForShoes) float64 {
-	totalPrice := (purchase.Quantity * purchase.ShoesPrice)
-	return totalPrice
-}
-func MakePurchaseForAccessories(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var purchase PurchaseForAccessories
-	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if purchase.Quantity <= 0 {
-		http.Error(w, "не правильное количество", http.StatusBadRequest)
-		return
-	}
-
-	total := calculateTotalPriceOfAccessories(purchase)
-
-	purchase.AccessPrice = total
-
-	if err := db.Create(&purchase).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(purchase)
-}
-
-func calculateTotalPriceOfAccessories(purchase PurchaseForAccessories) float64 {
-	totalPrice := (purchase.Quantity * purchase.AccessPrice)
-	return totalPrice
-}
-func MakePurchaseForBalls(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var purchase PurchaseForBalls
-	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if purchase.Quantity <= 0 {
-		http.Error(w, "не правильное количество", http.StatusBadRequest)
-		return
-	}
-
-	total := calculateTotalPriceOfBalls(purchase)
-
-	purchase.BallsPrice = total
-
-	if err := db.Create(&purchase).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(purchase)
-}
-
-func calculateTotalPriceOfBalls(purchase PurchaseForBalls) float64 {
-	totalPrice := (purchase.Quantity * purchase.BallsPrice)
-	return totalPrice
-}
 func CreateReview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -486,6 +409,205 @@ func GetReviewsByProductID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 	var reviews []Review
-	db.Where("id = ?", params["id"]).Find(&reviews)
+	db.Where("product_id = ?", params["id"]).Find(&reviews)
 	json.NewEncoder(w).Encode(reviews)
+}
+
+func calculateTotalPriceAndUpdateBalance(userID int, quantity, price float64) (float64, error) {
+	totalPrice := quantity * price
+
+	var user Users
+	if err := db.First(&user, userID).Error; err != nil {
+		return 0, err
+	}
+
+	if user.Balance < totalPrice {
+		return 0, fmt.Errorf("не хватает)")
+	}
+
+	user.Balance -= totalPrice
+	if err := db.Save(&user).Error; err != nil {
+		return 0, err
+	}
+
+	return totalPrice, nil
+}
+
+func MakePurchaseForRacket(w http.ResponseWriter, r *http.Request) {
+	var purchase struct {
+		UserID      int     `json:"user_id"`
+		RacketID    int     `json:"racket_id"`
+		Quantity    float64 `json:"quantity"`
+		RacketPrice float64 `json:"racket_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if purchase.Quantity <= 0 {
+		http.Error(w, "не правильное количество ", http.StatusBadRequest)
+		return
+	}
+
+	totalPrice, err := calculateTotalPriceAndUpdateBalance(purchase.UserID, purchase.Quantity, purchase.RacketPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	purchaseRecord := PurchaseForRacket{
+		RacketID:    purchase.RacketID,
+		Quantity:    purchase.Quantity,
+		RacketPrice: totalPrice,
+	}
+
+	if err := db.Create(&purchaseRecord).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(purchaseRecord)
+}
+func MakePurchaseForShoes(w http.ResponseWriter, r *http.Request) {
+	var purchase struct {
+		UserID     int     `json:"user_id"`
+		ShoesID    int     `json:"shoes_id"`
+		Quantity   float64 `json:"quantity"`
+		ShoesPrice float64 `json:"shoes_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if purchase.Quantity <= 0 {
+		http.Error(w, "не правильное количество ", http.StatusBadRequest)
+		return
+	}
+
+	totalPrice, err := calculateTotalPriceAndUpdateBalance(purchase.UserID, purchase.Quantity, purchase.ShoesPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	purchaseRecord := PurchaseForShoes{
+		UserID:     purchase.UserID,
+		ShoesID:    purchase.ShoesID,
+		Quantity:   purchase.Quantity,
+		ShoesPrice: purchase.ShoesPrice,
+		TotalPrice: totalPrice,
+	}
+
+	if err := db.Create(&purchaseRecord).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(purchaseRecord)
+}
+
+func MakePurchaseForAccessories(w http.ResponseWriter, r *http.Request) {
+	var purchase struct {
+		UserID      int     `json:"user_id"`
+		AccessID    int     `json:"access_id"`
+		Quantity    float64 `json:"quantity"`
+		AccessPrice float64 `json:"access_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if purchase.Quantity <= 0 {
+		http.Error(w, "не правильное количество ", http.StatusBadRequest)
+		return
+	}
+
+	totalPrice, err := calculateTotalPriceAndUpdateBalance(purchase.UserID, purchase.Quantity, purchase.AccessPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	purchaseRecord := PurchaseForAccessories{
+		UserID:      purchase.UserID,
+		AccessID:    purchase.AccessID,
+		Quantity:    purchase.Quantity,
+		AccessPrice: purchase.AccessPrice,
+		TotalPrice:  totalPrice,
+	}
+
+	if err := db.Create(&purchaseRecord).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(purchaseRecord)
+}
+
+func MakePurchaseForBalls(w http.ResponseWriter, r *http.Request) {
+	var purchase struct {
+		UserID     int     `json:"user_id"`
+		BallsID    int     `json:"balls_id"`
+		Quantity   float64 `json:"quantity"`
+		BallsPrice float64 `json:"balls_price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&purchase); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if purchase.Quantity <= 0 {
+		http.Error(w, "не правильное количество ", http.StatusBadRequest)
+		return
+	}
+
+	totalPrice, err := calculateTotalPriceAndUpdateBalance(purchase.UserID, purchase.Quantity, purchase.BallsPrice)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	purchaseRecord := PurchaseForBalls{
+		UserID:     purchase.UserID,
+		BallsID:    purchase.BallsID,
+		Quantity:   purchase.Quantity,
+		BallsPrice: purchase.BallsPrice,
+		TotalPrice: totalPrice,
+	}
+
+	if err := db.Create(&purchaseRecord).Error; err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(purchaseRecord)
+}
+
+func GetAllPurchases(w http.ResponseWriter, r *http.Request) {
+	var racketPurchases []PurchaseForRacket
+	var shoesPurchases []PurchaseForShoes
+	var accessoriesPurchases []PurchaseForAccessories
+	var ballsPurchases []PurchaseForBalls
+
+	db.Find(&racketPurchases)
+	db.Find(&shoesPurchases)
+	db.Find(&accessoriesPurchases)
+	db.Find(&ballsPurchases)
+
+	allPurchases := AllPurchases{
+		RacketPurchases:      racketPurchases,
+		ShoesPurchases:       shoesPurchases,
+		AccessoriesPurchases: accessoriesPurchases,
+		BallsPurchases:       ballsPurchases,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(allPurchases)
 }
